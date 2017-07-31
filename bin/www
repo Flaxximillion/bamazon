@@ -6,6 +6,27 @@ let debug = require('debug')('bamazon:server');
 let server = require('http').Server(app);
 let io = require('socket.io')(server);
 
+const {Pool, Client} = require('pg');
+const connectionString = process.env.DATABASE_URL;
+
+const pool = new Pool({
+    connectionString: connectionString
+});
+
+const query = {
+    text: 'CREATE TABLE user(' +
+    'id SERIAL PRIMARY KEY,' +
+    'item_name VARCHAR(50) NOT NULL,' +
+    'item_price INT(10) NOT NULL)'
+};
+
+pool.query(query, (err, res) => {
+    if(err){
+        console.log(err.stack)
+    } else {
+        console.log('yar');
+    }
+});
 
 io.on('connection', function(socket){
     socket.on('user', function(){
