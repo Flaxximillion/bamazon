@@ -17,7 +17,7 @@ const query = {
     text: 'CREATE TABLE user(' +
     'id SERIAL PRIMARY KEY,' +
     'item_name VARCHAR(50) NOT NULL,' +
-    'item_price INT(10) NOT NULL)'
+    'item_price INT NOT NULL)'
 };
 
 pool.query(query, (err, res) => {
