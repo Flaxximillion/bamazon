@@ -14,24 +14,32 @@ const pool = new Pool({
 });
 
 const query = {
-    text: 'CREATE TABLE user(' +
+    text: 'CREATE TABLE users (' +
     'id SERIAL PRIMARY KEY,' +
     'item_name VARCHAR(50) NOT NULL,' +
-    'item_price INT NOT NULL)'
+    'item_price INT NOT NULL);'
 };
-
-pool.query(query, (err, res) => {
-    if(err){
-        console.log(err.stack)
-    } else {
-        console.log('yar');
-    }
-});
 
 io.on('connection', function(socket){
     socket.on('user', function(){
-        console.log('user')
+        pool.query('select * from users', (err, res)=>{
+            if(err){
+                console.log(err.stack);
+            } else {
+                console.log(res.rows[0]);
+            }
+        })
     })
 });
+
+function sendQuery(query){
+    pool.query(query, (err, res)=>{
+        if(err){
+            console.log(err.stack)
+        } else {
+            console.log('yar', res.rows[0]);
+        }
+    })
+}
 
 server.listen(process.env.PORT || 3000);
