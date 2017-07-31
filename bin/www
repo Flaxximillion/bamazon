@@ -1,0 +1,16 @@
+#!/usr/bin/env node
+
+let app = require('../app');
+let debug = require('debug')('bamazon:server');
+
+let server = require('http').Server(app);
+let io = require('socket.io')(server);
+
+
+io.on('connection', function(socket){
+    socket.on('user', function(){
+        console.log('user')
+    })
+});
+
+server.listen(process.env.PORT || 3000);
