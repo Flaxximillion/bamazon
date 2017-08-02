@@ -5,6 +5,8 @@ let debug = require('debug')('bamazon:server');
 
 let server = require('http').Server(app);
 let io = require('socket.io')(server);
+let currSocket;
+let buildQuery = [];
 
 const {Pool, Client} = require('pg');
 const connectionString = process.env.DATABASE_URL;
@@ -13,33 +15,86 @@ const pool = new Pool({
     connectionString: connectionString
 });
 
-const query = {
-    text: 'CREATE TABLE users (' +
-    'id SERIAL PRIMARY KEY,' +
-    'item_name VARCHAR(50) NOT NULL,' +
-    'item_price INT NOT NULL);'
-};
+io.on('connection', function (socket) {
+    console.log('connected');
+    currSocket = socket;
+    socket.on('user', function () {
+        sendQuery({
+            text: 'select id, item_name, item_price, item_stock from public.items;'
+        }, 'user');
+    });
 
-io.on('connection', function(socket){
-    socket.on('user', function(){
-        pool.query('select * from users', (err, res)=>{
-            if(err){
-                console.log(err.stack);
-            } else {
-                console.log(res.rows[0]);
+    socket.on('purchase', function (data) {
+        console.log(data);
+        sendQuery(parseUserPurchase(data), 'none');
+    });
+
+    socket.on('manager', function () {
+        sendQuery({
+            text: 'select id, item_name, item_price, item_stock, item_purchased, item_revenue from public.items;'
+        }, 'manager');
+    });
+
+    socket.on('managerUpdate', function (data) {
+        let removed = data.removed;
+        if (removed.length === 0) {
+            sendQuery(parseManager(data), 'managerUpdate');
+        } else {
+            for (let i = 0; i < removed.length; i++) {
+                console.log('hello');
+                sendQuery({
+                    text: "DELETE FROM public.items WHERE item_name=$1 RETURNING *;",
+                    values: [data.removed[i]]
+                }, 'managerUpdate');
             }
-        })
-    })
+            let queryParams = parseManager(data);
+            if (queryParams === undefined) {
+                console.log('nay');
+            } else {
+                sendQuery(queryParams, 'managerUpdate');
+            }
+        }
+    });
 });
 
-function sendQuery(query){
-    pool.query(query, (err, res)=>{
-        if(err){
-            console.log(err.stack)
-        } else {
-            console.log('yar', res.rows[0]);
+function parseUserPurchase(dataObject) {
+    return {
+        text: 'UPDATE public.items SET item_stock=$1, item_purchased=item_purchased + $2, item_revenue=item_revenue+$3 WHERE id=$4',
+        values: [dataObject.item_stock, parseInt(dataObject.purchase_amount), parseInt(dataObject.purchase_amount * Number(dataObject.item_price.replace(/[^0-9\.]+/g, ""))), parseInt(dataObject.id)]
+    }
+}
+
+function parseManager(dataObject) {
+    for (let prop in dataObject) {
+        if (dataObject.hasOwnProperty(prop) && prop !== 'removed') {
+            let queryData = dataObject[prop];
+            let query = {
+                text: 'INSERT INTO public.items (item_name, item_price, item_stock, item_purchased, item_revenue)' +
+                'VALUES ($1, $2, $3, $4, $5)' +
+                'ON CONFLICT(item_name)' +
+                'DO UPDATE SET item_price = $2, item_stock = $3;',
+                values: [queryData.item_name, Number(queryData.item_price.replace(/[^0-9\.]+/g, "")), queryData.item_stock, 0, 0]
+            };
+            return query;
         }
-    })
+    }
+}
+
+function sendQuery(query, where) {
+    console.log(query);
+    pool.connect((err, client, done) => {
+        if (err) {
+            console.log(err, 89)
+        }
+        client.query(query, (err, res) => {
+            done();
+            if (err) {
+                console.log(err.stack, 92);
+            } else {
+                currSocket.emit('data', res.rows, where);
+            }
+        })
+    });
 }
 
 server.listen(process.env.PORT || 3000);
